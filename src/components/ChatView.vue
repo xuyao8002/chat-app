@@ -14,9 +14,15 @@
     </div>
     <div id="chat" v-if="selectedUser">
       <div id="messages" ref="messagesContainer">
+         <div v-if="selectedUser.hasMoreMessages" class="load-more-container">
+            <a href="#" class="load-more-link" @click.prevent="loadMoreMessages(selectedUser)">查询更多消息</a>
+         </div>
          <div v-for="(message, index) in messages" :key="index" 
               :class="{'received-message': message.toId !== selectedUser.friendId, 'sent-message': message.toId === selectedUser.friendId}">
-            <span class="message-text">{{ message.msg }}</span>
+            <div class="message-content">
+              <span class="message-time">{{ message.createTime }}</span>
+              <span class="message-text">{{ message.msg }}</span>
+            </div>
           </div>
       </div>
       <textarea v-model="newMessage" @keyup.enter="sendMessage" placeholder="输入消息" ref="messageInput"></textarea>
@@ -65,6 +71,7 @@ export default {
     selectedUser(newValue, oldValue) {
       if (newValue) {
         this.messages = this.allMessages[newValue.friendId] || [];
+        this.updateUserState(newValue);
       }
       this.readUserMessages(oldValue);
     }
@@ -96,7 +103,8 @@ export default {
         return;
       }
       this.ws.send(JSON.stringify({ msg: this.newMessage, toId: this.selectedUser.friendId }));
-      this.messages.push({msg: this.newMessage, fromId: this.userId, toId: this.selectedUser.friendId});
+      const currentTime = this.formatDateTime();
+      this.messages.push({msg: this.newMessage, fromId: this.userId, toId: this.selectedUser.friendId, createTime: currentTime});
       this.allMessages[this.selectedUser.friendId] = this.messages;
       this.newMessage = '';
       this.scrollToBottom();
@@ -126,34 +134,39 @@ export default {
           userId: item.userId,
           friendId: item.friendId,
           friendName: item.friendName,
-          unreadCount: 0
+          unreadCount: 0,
+          lastId: 0,
+          hasMoreMessages: true
         }));
         await Promise.all(this.users.map(async user => {
-          const messages = await this.fetchMessages(user.friendId);
+          const messages = await this.fetchMessages(user.friendId, user.lastId);
           this.allMessages[user.friendId] = messages;
           user.unreadCount = await this.fetchUnreadCount(user.friendId);
+          this.updateUserState(user);
         }));
         }
       } catch (error) {
         console.error('Failed to fetch users:', error);
       }
     },
-    async fetchMessages(fromId) {
+    async fetchMessages(fromId, lastId = 0) {
       try {
         const response = await axios.get('/api/message/list', {
           params: {
             toId: fromId,
-            lastId: 0,
+            lastId: lastId,
             pageSize: 10
           }
         });
-
-        return response.data.data.map(msg => ({
+        const messages = response.data.data.map(msg => ({
+          id: msg.id,
           msg: msg.msg,
+          createTime: msg.createTime,
           fromId: msg.fromId,
           toId: msg.toId,
           isRead: msg.isRead
         })).reverse();
+        return messages;
       } catch (error) {
         console.error('Failed to fetch messages:', error);
         return [];
@@ -171,6 +184,13 @@ export default {
         console.error('Failed to fetch unreadCount:', error);
         return 0;
       }
+    },
+    updateUserState(user) {
+      // 更新用户的 lastId 和 hasMoreMessages
+      const messages = this.allMessages[user.friendId];
+      const lastMessage = messages[0];
+      user.lastId = lastMessage  ? lastMessage .id : 0;
+      user.hasMoreMessages = messages.length === 10;
     },
     updateUnreadCount(user, count) {
       const index = this.users.findIndex(u => u.friendId === user.friendId);
@@ -192,6 +212,19 @@ export default {
           console.error(`Failed to mark messages as read for fromId ${fromId}:`, error);
         });
     },
+    loadMoreMessages(user) {
+      if (user && user.hasMoreMessages) {
+        this.fetchMessages(user.friendId, user.lastId)
+          .then(messages => {
+            // 将新获取的消息追加到当前消息列表
+            this.messages = [...messages, ...this.messages];
+            const firstMessage = messages[0];
+            user.lastId = firstMessage ? firstMessage.id : user.lastId;
+            user.hasMoreMessages = messages.length === 10;
+            this.scrollToTop(); // 滚动到顶部
+          });
+      }
+    },
     connectWebSocket() {
       if(this.token){
         this.ws = new WebSocket(`ws://${location.host}/ws/chat?token=${this.token}`);
@@ -212,6 +245,7 @@ export default {
         if (this.allMessages[messageData.fromId]) {
           this.allMessages[messageData.fromId].push({
             msg: messageData.msg,
+            createTime: this.formatDateTime(messageData.createTime),
             fromId: messageData.fromId,
             toId: messageData.toId,
             isRead: messageData.isRead
@@ -241,8 +275,26 @@ export default {
           this.$refs.messagesContainer.scrollTop = this.$refs.messagesContainer.scrollHeight;
         });
       }
+    },
+    scrollToTop() {
+      if (this.$refs.messagesContainer) {
+        this.$nextTick(() => {
+          this.$refs.messagesContainer.scrollTop = 0;
+        });
+      }
+    },
+    formatDateTime(dateTime){
+      const currentTime = (dateTime ? new Date(dateTime) : new Date()).toLocaleString('zh-CN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+      }).replace(/\//g, '-').replace(',', '');
+      return currentTime;
     }
-
   }
 };
 </script>
@@ -317,18 +369,44 @@ export default {
   margin-bottom: 10px;
 }
 
-.received-message {
-  text-align: left;
+.message-content {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+
+
+.received-message,
+.sent-message {
+  display: flex;
+  justify-content: flex-start;
   margin-bottom: 10px;
 }
 
 .sent-message {
-  text-align: right;
-  display: flex;
-  align-items: center;
-  margin-bottom: 10px;
+  justify-content: flex-end;
+}
+
+.message-meta {
+  display: block;
+  font-size: 0.8em;
+  color: #999;
+  margin-bottom: 5px;
+}
+
+.message-time {
+  font-size: 0.8em;
+  color: #999;
+  margin-bottom: 5px;
+}
+.received-message .message-time {
+  margin-left: 0;
+  margin-right: auto;
+}
+.sent-message .message-time {
+  margin-left: auto;
+  margin-right: 0;
 }
 
 .message-text {
@@ -336,13 +414,16 @@ export default {
   background-color: #F0F0F0; /* 浅灰色背景 */
   padding: 10px;
   border-radius: 5px;
-  max-width: 70%; /* 限制最大宽度 */
   word-wrap: break-word; /* 允许文本换行 */
 }
-
+.received-message .message-text {
+  margin-left: 0;
+  margin-right: auto;
+}
 .sent-message .message-text {
   background-color: #ADD8E6; /* 浅蓝色背景 */
   margin-left: auto; /* 右对齐 */
+  margin-right: 0;
 }
 
 textarea {
@@ -410,5 +491,17 @@ textarea {
   font-size: 12px;
   line-height: 1;
   margin-left: 5px;
+}
+
+/* 查询更多消息的样式 */
+.load-more-container {
+  text-align: center;
+  padding: 10px;
+}
+
+.load-more-link {
+  color: #007bff;
+  cursor: pointer;
+  text-decoration: none;
 }
 </style>
