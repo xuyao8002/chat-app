@@ -1,6 +1,21 @@
 <template>
   <div id="app-container">
-    <h1 class="app-header">{{ headerTitle }}</h1>
+    <header class="app-header">
+      <div class="search-container">
+        <input type="text" class="search-input" placeholder="查询好友" v-model="searchTerm" @input="filterUsers" @focus="toggleDropdown" ref="searchInput">
+        <button class="add-user-button" @click="showAddUserModal">
+          +
+        </button>
+        <div class="user-dropdown" v-if="showDropdown && filteredUsers.length > 0" :style="dropdownStyle">
+          <ul>
+            <li v-for="(user, index) in filteredUsers" :key="index" @click="selectUser(user)">
+              {{ user.friendName }}
+            </li>
+          </ul>
+        </div>
+      </div>
+      <h1 class="app-header-title">{{ headerTitle }}</h1>
+    </header>
     <div id="main-content">
     <div id="sidebar">
       <ul id="user-list">
@@ -50,12 +65,35 @@ export default {
       messageError: '',
       ws: null, // WebSocket连接
       token: null,
-      userId: -1
+      userId: -1,
+      searchTerm: '',
+      showDropdown: false
     };
   },
   computed: {
     headerTitle() {
       return this.selectedUser ? this.selectedUser.friendName : 'Chat';
+    },
+    filteredUsers() {
+      if (!this.searchTerm) {
+        return this.users;
+      }
+      return this.users.filter(user => 
+        user.friendName.toLowerCase().includes(this.searchTerm.toLowerCase())
+      );
+    },
+    dropdownStyle() {
+      // 获取 input 的位置信息
+      const inputRect = this.$refs.searchInput?.getBoundingClientRect();
+      if (inputRect) {
+        return {
+          position: 'absolute',
+          top: `${inputRect.bottom}px`, // 输入框底部的位置
+          left: `${inputRect.left}px`, // 输入框左边的位置
+          width: `${inputRect.width}px`, // 输入框的宽度
+        };
+      }
+      return {};
     }
   },
   created(){
@@ -76,8 +114,12 @@ export default {
       this.readUserMessages(oldValue);
     }
   },
+  mounted() {
+    document.addEventListener('click', this.documentClickHandler);
+  },
   beforeUnmount() {
     this.disconnectWebSocket();
+    document.removeEventListener('click', this.documentClickHandler);
   },
   methods: {
     readUserMessages(user){
@@ -90,11 +132,14 @@ export default {
         }
     },
     selectUser(user) {
+      console.log('Selecting user:', user); // 用于调试
       this.selectedUser = user;
+      this.showDropdown = false;
       this.updateUnreadCount(user, 0);
       //this.markMessagesAsRead(user.friendId);
       this.readUserMessages(user);
       this.scrollToBottom();
+      this.searchTerm = '';
     },
     sendMessage() {
       this.messageError = '';
@@ -225,6 +270,26 @@ export default {
           });
       }
     },
+    filterUsers() {
+      this.showDropdown = true;
+    },
+    toggleDropdown() {
+      this.showDropdown = true; // 显示下拉框
+    },
+    hideDropdown() {
+      this.showDropdown = false; // 隐藏下拉框
+    },
+    documentClickHandler(event) {
+      const searchInput = this.$refs.searchInput;
+      const dropdown = this.$el.querySelector('.user-dropdown');
+      
+      if (
+        !searchInput.contains(event.target) &&
+        !dropdown?.contains(event.target)
+      ) {
+        this.hideDropdown();
+      }
+    },
     connectWebSocket() {
       if(this.token){
         this.ws = new WebSocket(`ws://${location.host}/ws/chat?token=${this.token}`);
@@ -307,13 +372,6 @@ export default {
   overflow: hidden;
 }
 
-.app-header {
-  flex-shrink: 0;
-  background-color: #f4f4f4;
-  padding: 10px;
-  text-align: center;
-  width: 100%;
-}
 
 #main-content {
   display: flex;
@@ -503,5 +561,71 @@ textarea {
   color: #007bff;
   cursor: pointer;
   text-decoration: none;
+}
+
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px;
+  background-color: #fff;
+  border-bottom: 1px solid #ddd;
+}
+
+/* 搜索框 */
+.search-container {
+  flex: 0 0 200px; /* 固定宽度与 sidebar 一致 */
+  display: flex;
+  align-items: center;
+}
+
+.search-input {
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+/* 添加用户的按钮 */
+.add-user-button {
+  padding: 5px;
+  background-color: #007bff;
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  margin-left: 8px;
+}
+
+/* 头部标题 */
+.app-header-title {
+  flex: 1; /* 占据剩余空间 */
+  text-align: center; /* 文本居中 */
+  font-size: 1.5em;
+  font-weight: bold;
+}
+.user-dropdown {
+  background-color: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 1000;
+  position: absolute;
+}
+
+.user-dropdown ul {
+  list-style-type: none;
+  padding: 0;
+  margin: 0;
+}
+
+.user-dropdown li {
+  padding: 8px;
+  cursor: pointer;
+}
+
+.user-dropdown li:hover {
+  background-color: #f0f0f0;
 }
 </style>
