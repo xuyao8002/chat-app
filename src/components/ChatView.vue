@@ -3,7 +3,7 @@
     <header class="app-header">
       <div class="search-container">
         <input type="text" class="search-input" placeholder="查询好友" v-model="searchTerm" @input="filterUsers" @focus="toggleDropdown" ref="searchInput">
-        <button class="add-user-button" @click="showAddUserModal">
+        <button class="add-user-button" @click="openAddUserTooltip" ref="addUserButton">
           +
         </button>
         <div class="user-dropdown" v-if="showDropdown && filteredUsers.length > 0" :style="dropdownStyle">
@@ -47,6 +47,27 @@
       <div v-if="messageError" style="color: red;">{{ messageError }}</div>
     </div>
     </div>
+    <div class="tooltip" v-if="showAddUserTooltip" :style="tooltipStyle">
+      <div class="tooltip-content">
+        <form @submit.prevent="searchUser">
+          <div class="tooltip-row">
+            <label>用户ID:</label>
+            <input type="text" v-model="userIdInput" placeholder="请输入用户ID" required>
+            <button type="submit">查询</button>
+          </div>
+          <div class="tooltip-row" v-if="userId && userName">
+            <label>用户ID:</label>
+            <span>{{ userId }}</span>
+            <label>用户名:</label>
+            <span>{{ userName }}</span>
+          </div>
+          <div class="tooltip-row" v-if="userId && userName">
+            <button type="button" @click="addFriend" :class="addButtonClass" :disabled="addButtonClass === 'hidden'">添加用户</button>
+          </div>
+        </form>
+        <button @click="closeAddUserTooltip" class="close-button">关闭</button>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -65,9 +86,16 @@ export default {
       messageError: '',
       ws: null, // WebSocket连接
       token: null,
-      userId: -1,
+      //userId: -1,
       searchTerm: '',
-      showDropdown: false
+      showDropdown: false,
+      showAddUserModal: false,
+      userIdInput: '', // 用户ID输入框
+      userId: '', // 查询得到的用户ID
+      userName: '', // 查询得到的用户名
+      currentUserUserId: parseInt(Cookie.get('userId')),
+      showAddUserTooltip: false, // 控制提示框显示状态
+      tooltipPosition: { top: 0, left: 0 }, // 提示框位置
     };
   },
   computed: {
@@ -94,6 +122,19 @@ export default {
         };
       }
       return {};
+    },
+    addButtonClass() {
+      if (this.userId === this.currentUserUserId || this.users.some(u => u.friendId === this.userId)) {
+        return 'hidden'; // 如果是自己或已添加的好友，设置为 hidden 类
+      }
+      return ''; // 否则不设置类
+    },
+    tooltipStyle() {
+      return {
+        position: 'absolute',
+        top: `${this.tooltipPosition.top}px`,
+        left: `${this.tooltipPosition.left}px`,
+      };
     }
   },
   created(){
@@ -116,10 +157,14 @@ export default {
   },
   mounted() {
     document.addEventListener('click', this.documentClickHandler);
+    window.addEventListener('scroll', this.calculateTooltipPosition);
+    window.addEventListener('resize', this.calculateTooltipPosition);
   },
   beforeUnmount() {
     this.disconnectWebSocket();
     document.removeEventListener('click', this.documentClickHandler);
+    window.removeEventListener('scroll', this.calculateTooltipPosition);
+    window.removeEventListener('resize', this.calculateTooltipPosition);
   },
   methods: {
     readUserMessages(user){
@@ -132,7 +177,6 @@ export default {
         }
     },
     selectUser(user) {
-      console.log('Selecting user:', user); // 用于调试
       this.selectedUser = user;
       this.showDropdown = false;
       this.updateUnreadCount(user, 0);
@@ -269,6 +313,57 @@ export default {
             this.scrollToTop(); // 滚动到顶部
           });
       }
+    },
+    openAddUserTooltip() {
+      this.showAddUserTooltip = true;
+      this.calculateTooltipPosition(this.$refs.addUserButton);
+    },
+    calculateTooltipPosition(buttonRef) {
+      const buttonRect = buttonRef.getBoundingClientRect();
+      const scrollY = window.scrollY || document.documentElement.scrollTop;
+      const scrollX = window.scrollX || document.documentElement.scrollLeft;
+
+      // 计算相对于按钮的位置
+      this.tooltipPosition = {
+        top: buttonRect.bottom + 5 + scrollY, // 下方留5像素间距
+        left: buttonRect.left + scrollX,
+      };
+    },
+    closeAddUserTooltip() {
+      this.showAddUserTooltip = false;
+      this.userIdInput = ''; // 清空输入框
+      this.userId = ''; // 清空查询结果
+      this.userName = ''; // 清空查询结果
+    },
+    searchUser() {
+      const userId = this.userIdInput.trim();
+      if (userId) {
+        axios.get('/api/user/get', { params: { userId } })
+          .then(response => {
+            const { userId, userName } = response.data.data;
+            this.userId = userId;
+            this.userName = userName;
+            this.showAddUserTooltip = true;
+          })
+          .catch(error => {
+            console.error('Failed to fetch user info:', error);
+            alert('查询失败，请稍后再试！');
+          });
+      }
+    },
+    addFriend() {
+      axios.post('/api/friend/add', null, { params: { friendId: this.userId } })
+        .then(response => {
+          if (response.data.code === 1) {
+            alert('添加好友成功！');
+            this.closeAddUserTooltip();
+            this.fetchUsers(); // 刷新好友列表
+          }
+        })
+        .catch(error => {
+          console.error('Failed to add friend:', error);
+          alert('添加好友失败，请稍后再试！');
+        });
     },
     filterUsers() {
       this.showDropdown = true;
@@ -627,5 +722,45 @@ textarea {
 
 .user-dropdown li:hover {
   background-color: #f0f0f0;
+}
+.tooltip {
+  position: absolute;
+  z-index: 1000;
+  background-color: white;
+  border: 1px solid #ccc;
+  padding: 10px;
+  box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.3);
+}
+
+.tooltip-content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tooltip-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.tooltip-row label {
+  width: 60px;
+}
+
+.tooltip-row input {
+  width: 200px;
+}
+
+.close-button {
+  margin-top: 10px;
+}
+
+.hidden {
+  display: none; /* 隐藏按钮 */
+}
+
+.add-user-button {
+  position: relative; /* 确保按钮的位置可以获取 */
 }
 </style>

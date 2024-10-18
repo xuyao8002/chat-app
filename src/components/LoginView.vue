@@ -53,7 +53,8 @@ export default {
         if (response.data.code === 1) {
           // 登录成功
           // document.cookie = `token=${encodeURIComponent(response.data.data)}; path=/`;
-          Cookies.set('token', response.data.data);
+          Cookies.set('token', response.data.data.token);
+          Cookies.set('userId', response.data.data.userId);
           this.$router.push('/chat');
         } else {
           this.errorMessage = response.data.message;
