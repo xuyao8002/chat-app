@@ -19,13 +19,17 @@
     <div id="main-content">
     <div id="sidebar">
       <ul id="user-list">
-        <li v-for="(user, index) in users" :key="index" @click="selectUser(user)" :class="{ active: user === selectedUser }">
+        <li v-for="(user, index) in users" :key="index" @click="selectUser(user)" :class="{ active: user === selectedUser }"  @contextmenu.prevent="handleRightClick($event, user)">
           <span>{{ user.friendName }}</span>
           <span v-if="user.unreadCount > 0" class="unread-badge">
             {{ user.unreadCount > 99 ? '99+' : user.unreadCount }}
           </span>
         </li>
       </ul>
+    </div>
+    <div class="delete-menu" v-if="showDeleteMenu" :style="deleteMenuPosition">
+      <button @click="deleteFriend">删除好友</button>
+      <button @click="closeDeleteMenu">取消</button>
     </div>
     <div id="chat" v-if="selectedUser">
       <div id="messages" ref="messagesContainer">
@@ -96,6 +100,9 @@ export default {
       currentUserUserId: parseInt(Cookie.get('userId')),
       showAddUserTooltip: false, // 控制提示框显示状态
       tooltipPosition: { top: 0, left: 0 }, // 提示框位置
+      showDeleteMenu: false, // 控制删除菜单显示状态
+      selectedFriend: null, // 被选中的好友信息
+      deleteMenuPosition: { top: 0, left: 0 }, // 删除菜单位置
     };
   },
   computed: {
@@ -167,6 +174,48 @@ export default {
     window.removeEventListener('resize', this.calculateTooltipPosition);
   },
   methods: {
+    handleRightClick(event, friend) {
+      event.preventDefault(); // 阻止默认的右键行为
+      this.showDeleteMenu = true;
+      this.selectedFriend = friend;
+      this.deleteMenuPosition = {
+        top: event.clientY + 'px',
+        left: event.clientX + 'px',
+      };
+    },
+    deleteFriend() {
+      const selectedFriendId = this.selectedFriend.friendId;
+      axios.post('/api/friend/delete', null, { params: { friendId: selectedFriendId } })
+        .then(response => {
+          if (response.data.code === 1) {
+            alert('删除好友成功！');
+            if (this.selectedUser && this.selectedUser.friendId === selectedFriendId) {
+              this.selectedUser = null; // 清除当前选中的用户
+              this.resetChatSession(); // 重置聊天会话
+            }
+            this.fetchUsers(); // 刷新好友列表
+          }
+        })
+        .catch(error => {
+          console.error('Failed to delete friend:', error);
+          alert('删除好友失败，请稍后再试！');
+        });
+
+      this.closeDeleteMenu();
+    },
+    resetChatSession() {
+      // 清除聊天记录
+      this.chatMessages = [];
+      // 清除输入框
+      this.messageInput = '';
+      // 清除未读消息计数
+      this.unreadCount = 0;
+      // 可能还需要重置其他相关状态
+    },
+    closeDeleteMenu() {
+      this.showDeleteMenu = false;
+      this.selectedFriend = null;
+    },
     readUserMessages(user){
         if(user){
           const lastMessage = this.allMessages[user.friendId]?.slice(-1)[0];
@@ -762,5 +811,47 @@ textarea {
 
 .add-user-button {
   position: relative; /* 确保按钮的位置可以获取 */
+}
+#user-list {
+  list-style-type: none;
+  padding: 0;
+  margin: 0;
+}
+
+#user-list li {
+  cursor: pointer;
+  padding: 8px 16px;
+  border-bottom: 1px solid #ddd;
+}
+
+#user-list .active {
+  background-color: #e9ecef;
+}
+
+#user-list .unread-badge {
+  color: white;
+  background-color: #dc3545;
+  border-radius: 50%;
+  padding: 2px 6px;
+  font-size: 12px;
+  margin-left: 5px;
+}
+
+.delete-menu {
+  position: absolute;
+  background-color: white;
+  border: 1px solid #ccc;
+  padding: 10px;
+  box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.3);
+  z-index: 1000;
+}
+
+.delete-menu button {
+  display: block;
+  width: 100%;
+  margin: 5px 0;
+  padding: 8px;
+  text-align: center;
+  cursor: pointer;
 }
 </style>
