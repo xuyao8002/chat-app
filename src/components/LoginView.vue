@@ -36,10 +36,10 @@ export default {
       this.usernameError = '';
       this.passwordError = '';
       if (!this.username.trim()) {
-        this.usernameError = '用户名不能为空';
+        this.usernameError = 'Username is required.';
       }
       if (!this.password.trim()) {
-        this.passwordError = '密码不能为空';
+        this.passwordError = 'Password is required.';
       }
       if (this.usernameError || this.passwordError) {
         return;
@@ -55,6 +55,7 @@ export default {
           // document.cookie = `token=${encodeURIComponent(response.data.data)}; path=/`;
           Cookies.set('token', response.data.data.token);
           Cookies.set('userId', response.data.data.userId);
+          Cookies.set('userName', response.data.data.userName);
           this.$router.push('/chat');
         } else {
           this.errorMessage = response.data.message;

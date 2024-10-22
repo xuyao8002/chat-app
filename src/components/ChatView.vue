@@ -15,6 +15,9 @@
         </div>
       </div>
       <h1 class="app-header-title">{{ headerTitle }}</h1>
+      <div class="username-link" @click="toggleLogoutModal">
+        <a href="#">{{ currentUserName }}</a>
+      </div>
     </header>
     <div id="main-content">
     <div id="sidebar">
@@ -72,6 +75,15 @@
         <button @click="closeAddUserTooltip" class="close-button">关闭</button>
       </div>
     </div>
+    <transition name="fade">
+      <div class="logout-modal" v-if="showLogoutModal">
+        <div class="modal-content">
+          <p>确定要退出登录吗？</p>
+          <button @click="doLogout">确定</button>
+          <button @click="toggleLogoutModal">取消</button>
+        </div>
+      </div>
+    </transition>
   </div>
 </template>
 
@@ -103,6 +115,8 @@ export default {
       showDeleteMenu: false, // 控制删除菜单显示状态
       selectedFriend: null, // 被选中的好友信息
       deleteMenuPosition: { top: 0, left: 0 }, // 删除菜单位置
+      showLogoutModal: false, // 控制退出登录浮层显示状态
+      currentUserName: '', // 存储当前用户名
     };
   },
   computed: {
@@ -166,6 +180,7 @@ export default {
     document.addEventListener('click', this.documentClickHandler);
     window.addEventListener('scroll', this.calculateTooltipPosition);
     window.addEventListener('resize', this.calculateTooltipPosition);
+    this.fetchUserName();
   },
   beforeUnmount() {
     this.disconnectWebSocket();
@@ -433,6 +448,37 @@ export default {
       ) {
         this.hideDropdown();
       }
+    },
+    toggleLogoutModal() {
+      this.showLogoutModal = !this.showLogoutModal;
+    },
+    doLogout() {
+      // 关闭WebSocket连接
+      this.disconnectWebSocket();
+
+      // 调用后台退出登录接口
+      axios.post('/api/user/logout')
+        .then(response => {
+          if (response.data.data === true) {
+            // 页面跳转到登录页
+            // 删除cookie中的token、userId、userName
+            Cookie.remove('token');
+            Cookie.remove('userId');
+            Cookie.remove('userName');
+            this.$router.push('/login');
+          } else {
+            alert('退出登录失败，请稍后再试！');
+          }
+        })
+        .catch(error => {
+          console.error('Failed to logout:', error);
+          alert('退出登录失败，请稍后再试！');
+        });
+
+      this.toggleLogoutModal();
+    },
+    fetchUserName() {
+      this.currentUserName = Cookie.get('userName') || '未知用户';
     },
     connectWebSocket() {
       if(this.token){
@@ -853,5 +899,41 @@ textarea {
   padding: 8px;
   text-align: center;
   cursor: pointer;
+}
+
+.logout-modal {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.modal-content {
+  background: white;
+  padding: 20px;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+.username-link {
+  float: right;
+  cursor: pointer;
+  margin-top: 10px;
+  margin-right: 10px;
 }
 </style>
