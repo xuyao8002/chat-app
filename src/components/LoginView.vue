@@ -1,20 +1,17 @@
 <template>
-  <div>
-    <h1>Login</h1>
+  <div id="login-container">
+    <h1>登录</h1>
     <form @submit.prevent="login">
-    <div>
-       <label for="username">Username:</label>
-        <input type="text" id="username" v-model="username" placeholder="Username" />
-        <div v-if="usernameError" style="color: red;">{{ usernameError }}</div>
-    </div>
-    <div>
-        <label for="password">Password:</label>
-        <input type="password" id="password" v-model="password" placeholder="Password" />
-        <div v-if="passwordError" style="color: red;">{{ passwordError }}</div>
+      <div class="form-group">
+        <input type="text" id="username" v-model="username" placeholder="用户名" required>
       </div>
-      <button type="submit">Login</button>
+      <div class="form-group">
+        <input type="password" id="password" v-model="password" placeholder="密码" required>
+      </div>
+      <button type="submit" :disabled="!username.trim() || !password.trim()" :class="username.trim() && password.trim() ? 'login-button' : 'login-button-disabled'">登录</button>
     </form>
     <div v-if="errorMessage" style="color: red;">{{ errorMessage }}</div>
+    <div><a href="/register">注册</a></div>
   </div>
 </template>
 
@@ -26,24 +23,12 @@ export default {
     return {
       username: '',
       password: '',
-      usernameError: '',
-      passwordError: '',
       errorMessage: ''
     };
   },
   methods: {
     async login() {
-      this.usernameError = '';
-      this.passwordError = '';
-      if (!this.username.trim()) {
-        this.usernameError = 'Username is required.';
-      }
-      if (!this.password.trim()) {
-        this.passwordError = 'Password is required.';
-      }
-      if (this.usernameError || this.passwordError) {
-        return;
-      }
+      
       try {
         const response = await axios.post('/api/user/login', {
           userName: this.username,
@@ -69,7 +54,41 @@ export default {
 };
 </script>
 <style scoped>
-form div {
+.login-button {
+  padding: 10px;
+  background-color: #007BFF;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  width: 100px;
+}
+.login-button-disabled {
+  padding: 10px;
+  background-color: #cccccc;
+  color: #777777;
+  border: none;
+  border-radius: 4px;
+  cursor: not-allowed;
+  width: 100px;
+}
+#login-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   margin-bottom: 10px;
+}
+
+.form-group input {
+  order: 2;
+  width: 100%;
+  padding: 5px;
+  box-sizing: border-box;
 }
 </style>

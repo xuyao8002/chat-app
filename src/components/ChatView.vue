@@ -178,15 +178,13 @@ export default {
   },
   mounted() {
     document.addEventListener('click', this.documentClickHandler);
-    window.addEventListener('scroll', this.calculateTooltipPosition);
-    window.addEventListener('resize', this.calculateTooltipPosition);
+
     this.fetchUserName();
   },
   beforeUnmount() {
     this.disconnectWebSocket();
     document.removeEventListener('click', this.documentClickHandler);
-    window.removeEventListener('scroll', this.calculateTooltipPosition);
-    window.removeEventListener('resize', this.calculateTooltipPosition);
+
   },
   methods: {
     handleRightClick(event, friend) {
@@ -849,6 +847,9 @@ textarea {
 
 .close-button {
   margin-top: 10px;
+  width: 50px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .hidden {
