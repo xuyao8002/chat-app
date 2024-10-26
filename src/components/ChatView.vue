@@ -2,7 +2,7 @@
   <div id="app-container">
     <header class="app-header">
       <div class="search-container">
-        <input type="text" class="search-input" placeholder="查询好友" v-model="searchTerm" @input="filterUsers" @focus="toggleDropdown" ref="searchInput">
+        <input type="text" class="search-input" placeholder="输入用户名查询" v-model="searchTerm" @input="filterUsers" @focus="toggleDropdown" ref="searchInput">
         <button class="add-user-button" @click="openAddUserTooltip" ref="addUserButton">
           +
         </button>
@@ -16,7 +16,7 @@
       </div>
       <h1 class="app-header-title">{{ headerTitle }}</h1>
       <div class="username-link" @click="toggleLogoutModal">
-        <a href="#">{{ currentUserName }}</a>
+        <a href="#">{{ currentUserName }}({{currentUserUserId}})</a>
       </div>
     </header>
     <div id="main-content">
@@ -121,7 +121,7 @@ export default {
   },
   computed: {
     headerTitle() {
-      return this.selectedUser ? this.selectedUser.friendName : 'Chat';
+      return this.selectedUser ? this.selectedUser.friendName+"(" + this.selectedUser.friendId + ")" : 'Chat';
     },
     filteredUsers() {
       if (!this.searchTerm) {
@@ -402,10 +402,15 @@ export default {
       if (userId) {
         axios.get('/api/user/get', { params: { userId } })
           .then(response => {
-            const { userId, userName } = response.data.data;
-            this.userId = userId;
-            this.userName = userName;
-            this.showAddUserTooltip = true;
+            if(response.data.data){
+              const { userId, userName } = response.data.data;
+              this.userId = userId;
+              this.userName = userName;
+              this.showAddUserTooltip = true;
+            }else{
+              alert('用户不存在');
+            }
+            
           })
           .catch(error => {
             console.error('Failed to fetch user info:', error);
@@ -553,10 +558,15 @@ export default {
 </script>
 
 <style scoped>
+
+body {
+  overflow: hidden;
+  height: 100%;
+}
 #app-container {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 98vh;
   overflow: hidden;
 }
 
@@ -570,7 +580,7 @@ export default {
 }
 
 #sidebar {
-  width: 20%;
+  width: 250px;
   background-color: #f4f4f4;
   padding: 10px;
   overflow-y: auto;
@@ -601,10 +611,11 @@ export default {
 
 #chat {
   flex-grow: 1;
-  padding: 10px;
   display: flex;
   flex-direction: column;
   width: 80%;
+  padding-left: 10px;
+  padding-right: 10px;
 }
 
 #messages {
@@ -673,8 +684,7 @@ export default {
 }
 
 textarea {
-  width: 100%;
-  height: 100px;
+  height: 200px;
   margin-bottom: 10px;
   resize: none;
   border: 1px solid #ccc;
@@ -755,9 +765,9 @@ textarea {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px;
   background-color: #fff;
-  border-bottom: 1px solid #ddd;
+  padding-left: 10px;
+  padding-right: 10px;
 }
 
 /* 搜索框 */
@@ -782,6 +792,9 @@ textarea {
   border-radius: 5px;
   cursor: pointer;
   margin-left: 8px;
+  position: relative; /* 确保按钮的位置可以获取 */
+  width: 30px;
+  height: 30px;
 }
 
 /* 头部标题 */
@@ -856,9 +869,6 @@ textarea {
   display: none; /* 隐藏按钮 */
 }
 
-.add-user-button {
-  position: relative; /* 确保按钮的位置可以获取 */
-}
 #user-list {
   list-style-type: none;
   padding: 0;
@@ -868,7 +878,6 @@ textarea {
 #user-list li {
   cursor: pointer;
   padding: 8px 16px;
-  border-bottom: 1px solid #ddd;
 }
 
 #user-list .active {
